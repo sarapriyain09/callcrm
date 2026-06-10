@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_DIR="${APP_DIR:-/home/sarapriyain/callcrm}"
+APP_DIR="${APP_DIR:-/home/sarapriyain/Projects/callcrm}"
 REPO_URL="${REPO_URL:-https://github.com/sarapriyain09/callcrm.git}"
 
 sudo apt update

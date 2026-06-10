@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_DIR="${APP_DIR:-/home/sarapriyain/callcrm}"
+APP_DIR="${APP_DIR:-/home/sarapriyain/Projects/callcrm}"
 BRANCH="${BRANCH:-main}"
 
 cd "$APP_DIR"
@@ -16,6 +16,14 @@ npm ci
 
 echo "[3/7] Generating Prisma client..."
 npm run prisma:generate
+
+# Prisma CLI in apps/api expects env near schema; pass through DATABASE_URL from root .env.
+if [ -f .env ]; then
+	DB_LINE=$(grep '^DATABASE_URL=' .env || true)
+	if [ -n "$DB_LINE" ]; then
+		printf '%s\n' "$DB_LINE" > apps/api/.env
+	fi
+fi
 
 echo "[4/7] Running production migrations..."
 npm run prisma:migrate:deploy
