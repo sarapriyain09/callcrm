@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 
-export default function DialerPanel() {
+export default function DialerPanel({ role = 'agent' }) {
   const [toNumber, setToNumber] = useState('');
   const [introMessage, setIntroMessage] = useState('Hello. This is a call from Call CRM.');
   const [label, setLabel] = useState('');
@@ -19,7 +19,10 @@ export default function DialerPanel() {
     try {
       const res = await fetch('/api/calls/outbound', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-callcrm-role': role
+        },
         body: JSON.stringify({
           toNumber: toNumber.trim(),
           introMessage: introMessage.trim(),
