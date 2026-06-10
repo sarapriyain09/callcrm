@@ -7,7 +7,11 @@ module.exports = {
       interpreter: 'node',
       env: {
         NODE_ENV: 'production',
-        PORT: 4000
+        PORT: 4100
+      },
+      env_production: {
+        NODE_ENV: 'production',
+        PORT: 4100
       }
     },
     {
@@ -16,7 +20,12 @@ module.exports = {
       script: 'npm',
       args: 'run preview -- --host 0.0.0.0 --port 4173',
       env: {
-        NODE_ENV: 'production'
+        NODE_ENV: 'production',
+        API_PROXY_TARGET: 'http://localhost:4100'
+      },
+      env_production: {
+        NODE_ENV: 'production',
+        API_PROXY_TARGET: 'http://localhost:4100'
       }
     }
   ]
