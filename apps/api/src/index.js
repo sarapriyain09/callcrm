@@ -6,6 +6,8 @@ import twilioRoutes from './routes/twilio.js';
 import contactsRoutes from './routes/contacts.js';
 import callsRoutes from './routes/calls.js';
 import settingsRoutes from './routes/settings.js';
+import authRoutes from './routes/auth.js';
+import usersRoutes from './routes/users.js';
 
 const app = express();
 
@@ -15,9 +17,11 @@ app.use(express.urlencoded({ extended: false }));
 
 app.use('/health', healthRoutes);
 app.use('/twilio', twilioRoutes);
+app.use('/api/auth', authRoutes);
 app.use('/api/contacts', contactsRoutes);
 app.use('/api/calls', callsRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/users', usersRoutes);
 
 app.use((err, _req, res, _next) => {
   console.error(err);
