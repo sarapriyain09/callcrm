@@ -1,5 +1,9 @@
 import { config } from '../config.js';
 import { prisma } from './db.js';
+import { sendAgentActionEmail } from './notificationService.js';
+import { buildTwilioClient } from './twilioClient.js';
+
+const { client: twilioClient } = buildTwilioClient(config);
 
 function includesAny(text, words) {
   const normalized = String(text || '').toLowerCase();
@@ -73,6 +77,178 @@ function buildActionsFromCall(call) {
   return actions;
 }
 
+function withRetryDate() {
+  return new Date(Date.now() + Math.max(5, config.agentRetryDelaySeconds) * 1000);
+}
+
+async function postCrmActionEvent(action, call) {
+  if (!config.crmSyncEnabled || !config.crmWebhookUrl) {
+    return;
+  }
+
+  const headers = {
+    'Content-Type': 'application/json'
+  };
+
+  if (config.crmWebhookToken) {
+    headers.Authorization = `Bearer ${config.crmWebhookToken}`;
+  }
+
+  const response = await fetch(config.crmWebhookUrl, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      eventType: 'agent.action.executed',
+      occurredAt: new Date().toISOString(),
+      source: 'callcrm',
+      action: {
+        id: action.id,
+        actionType: action.actionType,
+        title: action.title,
+        details: action.details,
+        priority: action.priority,
+        status: 'EXECUTED'
+      },
+      call: {
+        id: call.id,
+        twilioCallSid: call.twilioCallSid,
+        status: call.status,
+        outcome: call.outcome,
+        fromNumber: call.fromNumber,
+        toNumber: call.toNumber,
+        contactId: call.contactId
+      }
+    })
+  });
+
+  if (!response.ok) {
+    const message = await response.text().catch(() => 'unknown CRM webhook error');
+    throw new Error(`CRM webhook rejected action: ${response.status} ${message}`);
+  }
+}
+
+async function executeConnector(action, call) {
+  switch (action.actionType) {
+    case 'SEND_WHATSAPP_FOLLOWUP': {
+      if (!twilioClient) {
+        throw new Error('Twilio client is not configured for WhatsApp execution.');
+      }
+
+      if (!config.twilioWhatsappFrom) {
+        throw new Error('TWILIO_WHATSAPP_FROM is missing.');
+      }
+
+      const to = call.contact?.phone || call.fromNumber;
+      if (!to) {
+        throw new Error('No recipient number available for WhatsApp follow-up.');
+      }
+
+      await twilioClient.messages.create({
+        from: config.twilioWhatsappFrom,
+        to: to.startsWith('whatsapp:') ? to : `whatsapp:${to}`,
+        body: `Hello from Splendid Technology. Following up on your recent call (${call.twilioCallSid}).`
+      });
+      return;
+    }
+    case 'SEND_EMAIL_ALERT': {
+      await sendAgentActionEmail({
+        toEmail: config.agentNotificationEmailTo,
+        subject: `[CallCRM] ${action.title}`,
+        body: action.details || `Action ${action.actionType} for call ${call.twilioCallSid}`
+      });
+      return;
+    }
+    default:
+      await postCrmActionEvent(action, call);
+  }
+}
+
+export async function executeAgentActionById(actionId) {
+  const action = await prisma.agentAction.findUnique({
+    where: { id: actionId },
+    include: {
+      call: {
+        include: {
+          contact: true
+        }
+      }
+    }
+  });
+
+  if (!action) throw new Error('Agent action not found.');
+
+  if (action.status === 'EXECUTED' || action.status === 'REJECTED' || action.status === 'FAILED') {
+    return action;
+  }
+
+  try {
+    await executeConnector(action, action.call);
+
+    return prisma.agentAction.update({
+      where: { id: action.id },
+      data: {
+        status: 'EXECUTED',
+        executedAt: new Date(),
+        lastError: null,
+        nextRetryAt: null
+      },
+      include: {
+        call: {
+          include: {
+            contact: true
+          }
+        }
+      }
+    });
+  } catch (error) {
+    const attempts = action.executionAttempts + 1;
+    const retryAllowed = attempts < Math.max(1, config.agentMaxRetries);
+
+    return prisma.agentAction.update({
+      where: { id: action.id },
+      data: {
+        status: retryAllowed ? 'APPROVED' : 'FAILED',
+        executionAttempts: attempts,
+        lastError: String(error?.message || error),
+        nextRetryAt: retryAllowed ? withRetryDate() : null,
+        failedAt: retryAllowed ? null : new Date()
+      },
+      include: {
+        call: {
+          include: {
+            contact: true
+          }
+        }
+      }
+    });
+  }
+}
+
+export async function processDueAgentRetries() {
+  const now = new Date();
+
+  const due = await prisma.agentAction.findMany({
+    where: {
+      status: 'APPROVED',
+      nextRetryAt: {
+        lte: now
+      }
+    },
+    orderBy: {
+      nextRetryAt: 'asc'
+    },
+    take: 25
+  });
+
+  let processed = 0;
+  for (const action of due) {
+    await executeAgentActionById(action.id);
+    processed += 1;
+  }
+
+  return { processed };
+}
+
 export async function generateAgentActionsForCall(callId) {
   if (!config.agentAutomationEnabled) {
     return [];
@@ -87,7 +263,8 @@ export async function generateAgentActionsForCall(callId) {
 
   await prisma.agentAction.deleteMany({ where: { callId } });
 
-  const status = config.agentApprovalMode === 'auto' ? 'EXECUTED' : 'PENDING';
+  const autoMode = config.agentApprovalMode === 'auto';
+  const status = autoMode ? 'APPROVED' : 'PENDING';
   const actionTemplates = buildActionsFromCall(call);
 
   const created = [];
@@ -111,6 +288,10 @@ export async function generateAgentActionsForCall(callId) {
         }
       }
     });
+
+    if (autoMode) {
+      await executeAgentActionById(row.id);
+    }
 
     created.push(row);
   }
@@ -138,9 +319,12 @@ export async function listAgentActions({ status } = {}) {
 }
 
 export async function updateAgentActionStatus(id, status) {
-  return prisma.agentAction.update({
+  const updated = await prisma.agentAction.update({
     where: { id },
-    data: { status },
+    data: {
+      status,
+      nextRetryAt: status === 'APPROVED' ? new Date() : null
+    },
     include: {
       call: {
         include: {
@@ -149,4 +333,10 @@ export async function updateAgentActionStatus(id, status) {
       }
     }
   });
+
+  if (status === 'APPROVED' || status === 'EXECUTED') {
+    return executeAgentActionById(id);
+  }
+
+  return updated;
 }

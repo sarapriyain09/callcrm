@@ -168,6 +168,35 @@ Typical action types:
 - `CUSTOMER_RECOVERY`
 - `REVIEW_CALL`
 
+## Agent v2 (Execution + Retry Queue)
+
+Agent v2 executes approved actions and retries failures automatically.
+
+Environment variables:
+
+- `AGENT_MAX_RETRIES=3`
+- `AGENT_RETRY_DELAY_SECONDS=60`
+- `AGENT_RETRY_INTERVAL_SECONDS=60`
+- `AGENT_NOTIFICATION_EMAIL_TO=<ops@splendid...>`
+- `TWILIO_WHATSAPP_FROM=whatsapp:+14155238886`
+
+Execution connectors:
+
+- CRM action push (default): sends `agent.action.executed` event to CRM webhook
+- WhatsApp connector: for `SEND_WHATSAPP_FOLLOWUP` action type via Twilio
+- Email connector: for `SEND_EMAIL_ALERT` action type
+
+Failure handling:
+
+- Failed execution increments `executionAttempts`
+- If attempts remain, status stays `APPROVED` with `nextRetryAt`
+- Once attempts exceed limit, status becomes `FAILED`
+
+Retry operations:
+
+- Background processor runs every `AGENT_RETRY_INTERVAL_SECONDS`
+- Manual trigger endpoint: `POST /api/agent-actions/process-retries` (admin)
+
 ## AI Summary Endpoints
 
 Store transcript for a call:

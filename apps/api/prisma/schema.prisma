@@ -29,6 +29,7 @@ enum AgentActionStatus {
   APPROVED
   EXECUTED
   REJECTED
+  FAILED
 }
 
 enum AgentActionPriority {
@@ -102,10 +103,16 @@ model AgentAction {
   payload      Json?
   priority     AgentActionPriority @default(MEDIUM)
   status       AgentActionStatus   @default(PENDING)
+  executionAttempts Int            @default(0)
+  lastError    String?
+  nextRetryAt  DateTime?
+  executedAt   DateTime?
+  failedAt     DateTime?
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
 
   @@index([callId])
   @@index([status])
   @@index([priority])
+  @@index([nextRetryAt])
 }

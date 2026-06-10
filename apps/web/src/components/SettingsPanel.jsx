@@ -22,6 +22,11 @@ const plainFields = [
   { key: 'MISSED_CALL_ALERT_EMAIL', label: 'Missed Call Alert Email' },
   { key: 'AGENT_AUTOMATION_ENABLED', label: 'Agent Automation Enabled (true/false)' },
   { key: 'AGENT_APPROVAL_MODE', label: 'Agent Approval Mode (review/auto)' },
+  { key: 'AGENT_MAX_RETRIES', label: 'Agent Max Retries' },
+  { key: 'AGENT_RETRY_DELAY_SECONDS', label: 'Agent Retry Delay (seconds)' },
+  { key: 'AGENT_RETRY_INTERVAL_SECONDS', label: 'Agent Retry Processor Interval (seconds)' },
+  { key: 'AGENT_NOTIFICATION_EMAIL_TO', label: 'Agent Notification Email Recipient' },
+  { key: 'TWILIO_WHATSAPP_FROM', label: 'Twilio WhatsApp From (e.g. whatsapp:+14155238886)' },
   { key: 'CRM_SYNC_ENABLED', label: 'CRM Sync Enabled (true/false)' },
   { key: 'CRM_WEBHOOK_URL', label: 'CRM Webhook URL (your CRM ingest endpoint)' },
   { key: 'OPENAI_MODEL', label: 'OpenAI Model' }

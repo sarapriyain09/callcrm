@@ -9,6 +9,7 @@ import settingsRoutes from './routes/settings.js';
 import authRoutes from './routes/auth.js';
 import usersRoutes from './routes/users.js';
 import agentActionsRoutes from './routes/agentActions.js';
+import { processDueAgentRetries } from './services/agentService.js';
 
 const app = express();
 
@@ -47,3 +48,10 @@ app.use((err, _req, res, _next) => {
 app.listen(config.port, () => {
   console.log(`[callcrm-api] listening on http://localhost:${config.port}`);
 });
+
+const retryIntervalMs = Math.max(5, Number(config.agentRetryIntervalSeconds || 60)) * 1000;
+setInterval(() => {
+  processDueAgentRetries().catch((error) => {
+    console.warn('[agent-retry] processor error', error?.message || error);
+  });
+}, retryIntervalMs);
