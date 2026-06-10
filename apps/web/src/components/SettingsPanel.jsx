@@ -20,6 +20,8 @@ const plainFields = [
   { key: 'LUNCH_BREAK_END', label: 'Lunch End Hour (0-23, optional)' },
   { key: 'ENABLE_FAILOVER', label: 'Enable Failover (true/false)' },
   { key: 'MISSED_CALL_ALERT_EMAIL', label: 'Missed Call Alert Email' },
+  { key: 'AGENT_AUTOMATION_ENABLED', label: 'Agent Automation Enabled (true/false)' },
+  { key: 'AGENT_APPROVAL_MODE', label: 'Agent Approval Mode (review/auto)' },
   { key: 'CRM_SYNC_ENABLED', label: 'CRM Sync Enabled (true/false)' },
   { key: 'CRM_WEBHOOK_URL', label: 'CRM Webhook URL (your CRM ingest endpoint)' },
   { key: 'OPENAI_MODEL', label: 'OpenAI Model' }

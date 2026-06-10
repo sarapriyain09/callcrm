@@ -15,6 +15,7 @@ import { upsertContactByPhone } from '../services/contactService.js';
 import { requireRole } from '../middleware/roleGuard.js';
 import { buildTwilioClient } from '../services/twilioClient.js';
 import { syncCallToCrm } from '../services/crmSyncService.js';
+import { generateAgentActionsForCall } from '../services/agentService.js';
 
 const router = Router();
 const { client: twilioClient } = buildTwilioClient(config);
@@ -163,6 +164,7 @@ router.post('/:id/ai-summary', async (req, res, next) => {
       model: result.model
     });
     await syncCallToCrm('call.summary.updated', updated);
+    const agentActions = await generateAgentActionsForCall(call.id);
 
     return res.json({
       data: {
@@ -170,7 +172,8 @@ router.post('/:id/ai-summary', async (req, res, next) => {
         summary: updated.summary,
         actionItems: updated.actionItems,
         summaryModel: updated.summaryModel,
-        summaryGeneratedAt: updated.summaryGeneratedAt
+        summaryGeneratedAt: updated.summaryGeneratedAt,
+        agentActions
       }
     });
   } catch (error) {

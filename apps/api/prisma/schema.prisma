@@ -24,6 +24,19 @@ enum UserRole {
   AGENT
 }
 
+enum AgentActionStatus {
+  PENDING
+  APPROVED
+  EXECUTED
+  REJECTED
+}
+
+enum AgentActionPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
 model User {
   id           String   @id @default(cuid())
   username     String   @unique
@@ -68,6 +81,7 @@ model CallLog {
   actionItems         String[]
   contactId           String?
   contact             Contact?      @relation(fields: [contactId], references: [id])
+  agentActions        AgentAction[]
   agentName           String?
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
@@ -75,4 +89,23 @@ model CallLog {
   @@index([fromNumber])
   @@index([status])
   @@index([createdAt])
+}
+
+model AgentAction {
+  id          String              @id @default(cuid())
+  callId       String
+  call         CallLog            @relation(fields: [callId], references: [id], onDelete: Cascade)
+  actionType   String
+  title        String
+  details      String?
+  reasoning    String?
+  payload      Json?
+  priority     AgentActionPriority @default(MEDIUM)
+  status       AgentActionStatus   @default(PENDING)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@index([callId])
+  @@index([status])
+  @@index([priority])
 }

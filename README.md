@@ -138,6 +138,36 @@ Current event types include:
 
 This supports a decoupled architecture: CallCRM remains telephony + AI engine while CRM receives synchronized business activity.
 
+## Agent v1 (Autonomous Action Suggestions)
+
+Agent v1 runs automatically when a call summary is generated (`POST /api/calls/:id/ai-summary`).
+
+Environment variables:
+
+- `AGENT_AUTOMATION_ENABLED=true`
+- `AGENT_APPROVAL_MODE=review` (`review` or `auto`)
+
+Behavior:
+
+- Generates suggested actions from call outcome, summary, and transcript
+- Stores actions in `AgentAction` table with audit trail
+- `review` mode: actions are created as `PENDING`
+- `auto` mode: actions are created as `EXECUTED`
+
+API endpoints:
+
+- `GET /api/agent-actions` (admin/agent)
+- `PUT /api/agent-actions/:id/status` (admin)
+
+Typical action types:
+
+- `CREATE_CALLBACK_TASK`
+- `ESCALATE_PRIORITY`
+- `CREATE_CRM_TASK`
+- `SCHEDULE_FOLLOWUP`
+- `CUSTOMER_RECOVERY`
+- `REVIEW_CALL`
+
 ## AI Summary Endpoints
 
 Store transcript for a call:

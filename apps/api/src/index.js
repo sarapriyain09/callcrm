@@ -8,6 +8,7 @@ import callsRoutes from './routes/calls.js';
 import settingsRoutes from './routes/settings.js';
 import authRoutes from './routes/auth.js';
 import usersRoutes from './routes/users.js';
+import agentActionsRoutes from './routes/agentActions.js';
 
 const app = express();
 
@@ -22,6 +23,7 @@ app.use('/api/contacts', contactsRoutes);
 app.use('/api/calls', callsRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/users', usersRoutes);
+app.use('/api/agent-actions', agentActionsRoutes);
 
 app.use((err, _req, res, _next) => {
   console.error(err);

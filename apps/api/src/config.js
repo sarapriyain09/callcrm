@@ -59,6 +59,8 @@ export const config = {
   lunchBreakEnd: parseOptionalHour(process.env.LUNCH_BREAK_END),
   enableFailover: (process.env.ENABLE_FAILOVER || 'true').toLowerCase() !== 'false',
   missedCallAlertEmail: process.env.MISSED_CALL_ALERT_EMAIL || '',
+  agentAutomationEnabled: (process.env.AGENT_AUTOMATION_ENABLED || 'true').toLowerCase() !== 'false',
+  agentApprovalMode: (process.env.AGENT_APPROVAL_MODE || 'review').toLowerCase(),
   crmSyncEnabled: (process.env.CRM_SYNC_ENABLED || 'false').toLowerCase() === 'true',
   crmWebhookUrl: process.env.CRM_WEBHOOK_URL || '',
   crmWebhookToken: process.env.CRM_WEBHOOK_TOKEN || '',

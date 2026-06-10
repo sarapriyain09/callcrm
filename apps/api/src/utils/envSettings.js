@@ -28,6 +28,8 @@ export const editablePlainKeys = [
   'LUNCH_BREAK_END',
   'ENABLE_FAILOVER',
   'MISSED_CALL_ALERT_EMAIL',
+  'AGENT_AUTOMATION_ENABLED',
+  'AGENT_APPROVAL_MODE',
   'CRM_SYNC_ENABLED',
   'CRM_WEBHOOK_URL',
   'OPENAI_MODEL'
@@ -52,6 +54,8 @@ const plainDefaults = {
   LUNCH_BREAK_START: '13',
   LUNCH_BREAK_END: '14',
   ENABLE_FAILOVER: 'true',
+  AGENT_AUTOMATION_ENABLED: 'true',
+  AGENT_APPROVAL_MODE: 'review',
   CRM_SYNC_ENABLED: 'false',
   CRM_WEBHOOK_URL: '',
   OPENAI_MODEL: 'gpt-4o-mini'
