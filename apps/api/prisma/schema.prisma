@@ -1,0 +1,62 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CallDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum CallOutcome {
+  ANSWERED
+  MISSED
+  VOICEMAIL
+  ABANDONED
+}
+
+model Contact {
+  id          String   @id @default(cuid())
+  name        String?
+  phone       String   @unique
+  email       String?
+  tags        String[]
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  callLogs    CallLog[]
+}
+
+model CallLog {
+  id                  String        @id @default(cuid())
+  twilioCallSid       String        @unique
+  direction           CallDirection @default(INBOUND)
+  fromNumber          String
+  toNumber            String
+  ivrSelection        String?
+  routedTo            String?
+  status              String
+  durationSeconds     Int?
+  outcome             CallOutcome?
+  recordingSid        String?
+  recordingUrl        String?
+  recordingStatus     String?
+  transcript          String?
+  summary             String?
+  summaryModel        String?
+  summaryGeneratedAt  DateTime?
+  actionItems         String[]
+  contactId           String?
+  contact             Contact?      @relation(fields: [contactId], references: [id])
+  agentName           String?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  @@index([fromNumber])
+  @@index([status])
+  @@index([createdAt])
+}

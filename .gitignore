@@ -1,0 +1,10 @@
+node_modules/
+.venv/
+.env
+.env.*
+!.env.example
+coverage/
+dist/
+.DS_Store
+*.log
+apps/api/generated/
