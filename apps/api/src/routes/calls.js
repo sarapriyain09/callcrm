@@ -14,6 +14,7 @@ import { generateCallSummary } from '../services/aiSummaryService.js';
 import { upsertContactByPhone } from '../services/contactService.js';
 import { requireRole } from '../middleware/roleGuard.js';
 import { buildTwilioClient } from '../services/twilioClient.js';
+import { syncCallToCrm } from '../services/crmSyncService.js';
 
 const router = Router();
 const { client: twilioClient } = buildTwilioClient(config);
@@ -87,6 +88,7 @@ router.post('/outbound', requireRole(['admin', 'agent']), async (req, res, next)
       Direction: 'OUTBOUND',
       contactId: contact?.id
     });
+    await syncCallToCrm('call.outbound.created', callLog);
 
     return res.status(201).json({
       data: {
@@ -126,6 +128,7 @@ router.post('/:id/transcript', async (req, res, next) => {
   try {
     const { transcript } = transcriptSchema.parse(req.body);
     const call = await updateCallTranscript(req.params.id, transcript);
+    await syncCallToCrm('call.transcript.updated', call);
     res.json({ data: call });
   } catch (error) {
     next(error);
@@ -159,6 +162,7 @@ router.post('/:id/ai-summary', async (req, res, next) => {
       actionItems: result.actionItems,
       model: result.model
     });
+    await syncCallToCrm('call.summary.updated', updated);
 
     return res.json({
       data: {

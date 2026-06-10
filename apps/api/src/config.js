@@ -59,6 +59,9 @@ export const config = {
   lunchBreakEnd: parseOptionalHour(process.env.LUNCH_BREAK_END),
   enableFailover: (process.env.ENABLE_FAILOVER || 'true').toLowerCase() !== 'false',
   missedCallAlertEmail: process.env.MISSED_CALL_ALERT_EMAIL || '',
+  crmSyncEnabled: (process.env.CRM_SYNC_ENABLED || 'false').toLowerCase() === 'true',
+  crmWebhookUrl: process.env.CRM_WEBHOOK_URL || '',
+  crmWebhookToken: process.env.CRM_WEBHOOK_TOKEN || '',
   openAiApiKey: process.env.OPENAI_API_KEY || '',
   openAiModel: process.env.OPENAI_MODEL || 'gpt-4o-mini'
 };

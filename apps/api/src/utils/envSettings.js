@@ -28,6 +28,8 @@ export const editablePlainKeys = [
   'LUNCH_BREAK_END',
   'ENABLE_FAILOVER',
   'MISSED_CALL_ALERT_EMAIL',
+  'CRM_SYNC_ENABLED',
+  'CRM_WEBHOOK_URL',
   'OPENAI_MODEL'
 ];
 
@@ -36,6 +38,7 @@ export const editableSecretKeys = [
   'TWILIO_AUTH_TOKEN',
   'TWILIO_API_KEY_SID',
   'TWILIO_API_KEY_SECRET',
+  'CRM_WEBHOOK_TOKEN',
   'OPENAI_API_KEY'
 ];
 
@@ -49,6 +52,8 @@ const plainDefaults = {
   LUNCH_BREAK_START: '13',
   LUNCH_BREAK_END: '14',
   ENABLE_FAILOVER: 'true',
+  CRM_SYNC_ENABLED: 'false',
+  CRM_WEBHOOK_URL: '',
   OPENAI_MODEL: 'gpt-4o-mini'
 };
 

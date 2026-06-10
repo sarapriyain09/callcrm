@@ -3,12 +3,14 @@ import twilio from 'twilio';
 import { config } from '../config.js';
 import {
   createOrUpdateCallFromWebhook,
+  getCallBySid,
   markCallOutcome,
   updateCallRecording,
   updateCallStatus
 } from '../services/callService.js';
 import { upsertContactByPhone } from '../services/contactService.js';
 import { sendMissedCallAlert } from '../services/notificationService.js';
+import { syncCallToCrm } from '../services/crmSyncService.js';
 
 const router = Router();
 const VoiceResponse = twilio.twiml.VoiceResponse;
@@ -103,7 +105,7 @@ router.post('/voice/incoming', async (req, res, next) => {
     const contact = await upsertContactByPhone(From);
 
     if (!isBusinessHoursNow()) {
-      await createOrUpdateCallFromWebhook({
+      const call = await createOrUpdateCallFromWebhook({
         CallSid,
         From,
         To,
@@ -111,6 +113,7 @@ router.post('/voice/incoming', async (req, res, next) => {
         contactId: contact?.id,
         RoutedTo: config.afterHoursRouteNumber || null
       });
+      await syncCallToCrm('call.created', call);
 
       if (config.afterHoursRouteNumber) {
         twiml.say(
@@ -131,13 +134,14 @@ router.post('/voice/incoming', async (req, res, next) => {
     }
 
     if (!Digits) {
-      await createOrUpdateCallFromWebhook({
+      const call = await createOrUpdateCallFromWebhook({
         CallSid,
         From,
         To,
         CallStatus,
         contactId: contact?.id
       });
+      await syncCallToCrm('call.updated', call);
 
       const gather = twiml.gather({
         numDigits: 1,
@@ -158,7 +162,7 @@ router.post('/voice/incoming', async (req, res, next) => {
       const destination = routeMap[selectedDigit];
       const dialChain = destination ? getDialChain(selectedDigit) : [];
 
-      await createOrUpdateCallFromWebhook({
+      const call = await createOrUpdateCallFromWebhook({
         CallSid,
         From,
         To,
@@ -167,6 +171,7 @@ router.post('/voice/incoming', async (req, res, next) => {
         RoutedTo: destination?.number,
         contactId: contact?.id
       });
+      await syncCallToCrm('call.routed', call);
 
       if (!destination || dialChain.length === 0) {
         twiml.say(
@@ -201,16 +206,18 @@ router.post('/voice/dial-complete', async (req, res, next) => {
 
     if (DialCallStatus === 'completed') {
       await markCallOutcome(CallSid, 'ANSWERED');
+        await syncCallToCrm('call.completed', await getCallBySid(CallSid));
     } else if (
       (DialCallStatus === 'busy' || DialCallStatus === 'no-answer') &&
       nextTarget
     ) {
-      await createOrUpdateCallFromWebhook({
+      const call = await createOrUpdateCallFromWebhook({
         CallSid,
         From,
         CallStatus: DialCallStatus,
         RoutedTo: nextTarget
       });
+      await syncCallToCrm('call.rerouted', call);
 
       twiml.say(
         { voice: 'alice' },
@@ -219,6 +226,7 @@ router.post('/voice/dial-complete', async (req, res, next) => {
       dialTarget(twiml, nextTarget, chain, nextIdx);
     } else if (DialCallStatus === 'busy' || DialCallStatus === 'no-answer') {
       await markCallOutcome(CallSid, 'MISSED');
+        await syncCallToCrm('call.missed', await getCallBySid(CallSid));
       await sendMissedCallAlert({
         callSid: CallSid,
         fromNumber: From,
@@ -232,6 +240,7 @@ router.post('/voice/dial-complete', async (req, res, next) => {
       twiml.record({ maxLength: 120, playBeep: true });
     } else {
       await markCallOutcome(CallSid, 'ABANDONED');
+        await syncCallToCrm('call.abandoned', await getCallBySid(CallSid));
       twiml.say({ voice: 'alice' }, 'The call could not be connected. Please try later.');
     }
 
@@ -244,6 +253,7 @@ router.post('/voice/dial-complete', async (req, res, next) => {
 router.post('/voice/status', async (req, res, next) => {
   try {
     await updateCallStatus(req.body);
+    await syncCallToCrm('call.status', await getCallBySid(req.body?.CallSid));
     res.sendStatus(204);
   } catch (error) {
     next(error);
@@ -253,6 +263,7 @@ router.post('/voice/status', async (req, res, next) => {
 router.post('/voice/recording', async (req, res, next) => {
   try {
     await updateCallRecording(req.body);
+    await syncCallToCrm('call.recording', await getCallBySid(req.body?.CallSid));
     res.sendStatus(204);
   } catch (error) {
     next(error);

@@ -20,6 +20,8 @@ const plainFields = [
   { key: 'LUNCH_BREAK_END', label: 'Lunch End Hour (0-23, optional)' },
   { key: 'ENABLE_FAILOVER', label: 'Enable Failover (true/false)' },
   { key: 'MISSED_CALL_ALERT_EMAIL', label: 'Missed Call Alert Email' },
+  { key: 'CRM_SYNC_ENABLED', label: 'CRM Sync Enabled (true/false)' },
+  { key: 'CRM_WEBHOOK_URL', label: 'CRM Webhook URL (your CRM ingest endpoint)' },
   { key: 'OPENAI_MODEL', label: 'OpenAI Model' }
 ];
 
@@ -28,6 +30,7 @@ const secretFields = [
   { key: 'TWILIO_AUTH_TOKEN', label: 'Twilio Auth Token (optional if using API key)' },
   { key: 'TWILIO_API_KEY_SID', label: 'Twilio API Key SID (SK...)' },
   { key: 'TWILIO_API_KEY_SECRET', label: 'Twilio API Key Secret' },
+  { key: 'CRM_WEBHOOK_TOKEN', label: 'CRM Webhook Bearer Token' },
   { key: 'OPENAI_API_KEY', label: 'OpenAI API Key' }
 ];
 

@@ -104,6 +104,15 @@ export async function getCallById(callId) {
   });
 }
 
+export async function getCallBySid(callSid) {
+  if (!callSid) return null;
+
+  return prisma.callLog.findUnique({
+    where: { twilioCallSid: callSid },
+    include: { contact: true }
+  });
+}
+
 export async function updateCallTranscript(callId, transcript) {
   if (!callId) return null;
 

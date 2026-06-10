@@ -83,6 +83,61 @@ ngrok http 4000
 - CRM sync adapters (HubSpot, Salesforce, Zoho)
 - WhatsApp workflow module
 
+## CRM Sync Contract (Phase 2)
+
+CallCRM can push call lifecycle events to your CRM (for example `crm.splendidtechnology.co.uk`) using a webhook.
+
+Environment variables:
+
+- `CRM_SYNC_ENABLED=true`
+- `CRM_WEBHOOK_URL=https://crm.splendidtechnology.co.uk/api/callcrm/events`
+- `CRM_WEBHOOK_TOKEN=<shared-bearer-token>`
+
+When enabled, CallCRM sends `POST` requests with JSON payload:
+
+```json
+{
+   "eventType": "call.summary.updated",
+   "occurredAt": "2026-06-10T11:00:00.000Z",
+   "source": "callcrm",
+   "call": {
+      "id": "cm...",
+      "twilioCallSid": "CA...",
+      "direction": "INBOUND",
+      "status": "completed",
+      "outcome": "ANSWERED",
+      "fromNumber": "+44...",
+      "toNumber": "+44...",
+      "ivrSelection": "2",
+      "routedTo": "+44...",
+      "durationSeconds": 86,
+      "transcript": "...",
+      "summary": "...",
+      "actionItems": ["..."],
+      "recordingUrl": "...",
+      "recordingStatus": "completed",
+      "createdAt": "...",
+      "updatedAt": "...",
+      "contact": {
+         "id": "cm...",
+         "name": "...",
+         "email": "...",
+         "phone": "+44...",
+         "tags": ["..."],
+         "notes": "..."
+      }
+   }
+}
+```
+
+Current event types include:
+
+- `call.created`, `call.updated`, `call.routed`, `call.rerouted`
+- `call.status`, `call.recording`, `call.completed`, `call.missed`, `call.abandoned`
+- `call.outbound.created`, `call.transcript.updated`, `call.summary.updated`
+
+This supports a decoupled architecture: CallCRM remains telephony + AI engine while CRM receives synchronized business activity.
+
 ## AI Summary Endpoints
 
 Store transcript for a call:
