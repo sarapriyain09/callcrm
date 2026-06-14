@@ -4,21 +4,62 @@ import twilio from 'twilio';
 import { config } from '../config.js';
 import {
   createOrUpdateCallFromWebhook,
+  deleteCallById,
   getCallById,
   listLiveCalls,
   listCalls,
   updateCallSummary,
   updateCallTranscript
 } from '../services/callService.js';
-import { generateCallSummary } from '../services/aiSummaryService.js';
+import { generateCallSummary, generateNextStepAssistant } from '../services/aiSummaryService.js';
 import { upsertContactByPhone } from '../services/contactService.js';
 import { requireRole } from '../middleware/roleGuard.js';
 import { buildTwilioClient } from '../services/twilioClient.js';
 import { syncCallToCrm } from '../services/crmSyncService.js';
 import { generateAgentActionsForCall } from '../services/agentService.js';
+import { prisma } from '../services/db.js';
 
 const router = Router();
 const { client: twilioClient } = buildTwilioClient(config);
+
+function isPublicCallbackBaseUrl(value) {
+  try {
+    const parsed = new URL(value);
+    const protocolOk = parsed.protocol === 'https:' || parsed.protocol === 'http:';
+    if (!protocolOk) return false;
+
+    const hostname = parsed.hostname.toLowerCase();
+
+    // Twilio cannot reach localhost or loopback/private callback targets.
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') {
+      return false;
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function callbackUrl(pathname) {
+  return new URL(pathname, config.appBaseUrl).toString();
+}
+
+async function getOutboundBridgeNumber() {
+  const adminUser = await prisma.user.findFirst({
+    where: {
+      username: { equals: 'admin', mode: 'insensitive' },
+      isActive: true,
+      phoneNumber: { not: null }
+    },
+    select: { phoneNumber: true }
+  });
+
+  const adminNumber = String(adminUser?.phoneNumber || '').trim();
+  if (adminNumber) return adminNumber;
+
+  return String(config.routeAccountsNumber || '').trim();
+}
 
 router.get('/', async (_req, res, next) => {
   try {
@@ -33,6 +74,20 @@ router.get('/live', async (_req, res, next) => {
   try {
     const calls = await listLiveCalls();
     res.json({ data: calls });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete('/:id', requireRole(['admin', 'agent']), async (req, res, next) => {
+  try {
+    const existing = await getCallById(req.params.id);
+    if (!existing) {
+      return res.status(404).json({ error: 'Call not found' });
+    }
+
+    await deleteCallById(req.params.id);
+    return res.sendStatus(204);
   } catch (error) {
     next(error);
   }
@@ -61,6 +116,14 @@ router.post('/outbound', requireRole(['admin', 'agent']), async (req, res, next)
       });
     }
 
+    if (!isPublicCallbackBaseUrl(config.appBaseUrl)) {
+      return res.status(400).json({
+        error: 'Invalid APP_BASE_URL for Twilio callbacks.',
+        message:
+          'Set APP_BASE_URL to a publicly reachable URL (for example your ngrok or production HTTPS URL), then retry the outbound call.'
+      });
+    }
+
     const twiml = new twilio.twiml.VoiceResponse();
     const intro = payload.introMessage || 'Hello. This is a call from Call CRM.';
     twiml.say({ voice: 'alice' }, intro);
@@ -69,15 +132,31 @@ router.post('/outbound', requireRole(['admin', 'agent']), async (req, res, next)
       twiml.say({ voice: 'alice' }, `Reference: ${payload.label}.`);
     }
 
+    const bridgeNumber = await getOutboundBridgeNumber();
+    if (!bridgeNumber) {
+      return res.status(400).json({
+        error: 'Admin bridge number is missing.',
+        message:
+          'Set admin user phoneNumber (recommended) or ROUTE_ACCOUNTS_NUMBER to connect outbound customer calls to admin.'
+      });
+    }
+
+    const dial = twiml.dial({
+      callerId: config.twilioPhoneNumber,
+      record: 'record-from-answer',
+      recordingStatusCallback: callbackUrl('/twilio/voice/recording')
+    });
+    dial.number(bridgeNumber);
+
     const call = await twilioClient.calls.create({
       to: payload.toNumber,
       from: config.twilioPhoneNumber,
       twiml: twiml.toString(),
-      statusCallback: `${config.appBaseUrl}/twilio/voice/status`,
+      statusCallback: callbackUrl('/twilio/voice/status'),
       statusCallbackMethod: 'POST',
       statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed'],
       record: true,
-      recordingStatusCallback: `${config.appBaseUrl}/twilio/voice/recording`
+      recordingStatusCallback: callbackUrl('/twilio/voice/recording')
     });
 
     const contact = await upsertContactByPhone(payload.toNumber);
@@ -114,6 +193,14 @@ router.post('/outbound', requireRole(['admin', 'agent']), async (req, res, next)
         error: 'Twilio trial destination blocked',
         message:
           'Trial account can only call verified destination numbers. Verify the recipient number in Twilio console.'
+      });
+    }
+
+    if (Number(error?.code) === 21609) {
+      return res.status(400).json({
+        error: 'Invalid Twilio callback URL',
+        message:
+          'Twilio rejected the callback URL. Ensure APP_BASE_URL is a publicly reachable absolute URL and does not point to localhost.'
       });
     }
 
@@ -165,6 +252,11 @@ router.post('/:id/ai-summary', async (req, res, next) => {
     });
     await syncCallToCrm('call.summary.updated', updated);
     const agentActions = await generateAgentActionsForCall(call.id);
+    const assistant = await generateNextStepAssistant({
+      call: updated,
+      notes: input.notes,
+      agentActions
+    });
 
     return res.json({
       data: {
@@ -173,7 +265,45 @@ router.post('/:id/ai-summary', async (req, res, next) => {
         actionItems: updated.actionItems,
         summaryModel: updated.summaryModel,
         summaryGeneratedAt: updated.summaryGeneratedAt,
-        agentActions
+        agentActions,
+        assistant
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+const assistantSchema = z.object({
+  notes: z.string().trim().optional(),
+  objective: z.string().trim().max(240).optional()
+});
+
+router.post('/:id/ai-assistant', requireRole(['admin', 'agent']), async (req, res, next) => {
+  try {
+    const call = await getCallById(req.params.id);
+    if (!call) {
+      return res.status(404).json({ error: 'Call not found' });
+    }
+
+    const input = assistantSchema.parse(req.body || {});
+
+    const actionRows = await prisma.agentAction.findMany({
+      where: { callId: call.id },
+      orderBy: { createdAt: 'desc' },
+      take: 25
+    });
+
+    const assistant = await generateNextStepAssistant({
+      call,
+      notes: [input.objective, input.notes].filter(Boolean).join(' | '),
+      agentActions: actionRows
+    });
+
+    return res.json({
+      data: {
+        callId: call.id,
+        ...assistant
       }
     });
   } catch (error) {

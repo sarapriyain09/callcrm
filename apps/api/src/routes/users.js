@@ -7,12 +7,20 @@ import { hashPassword } from '../utils/passwordHash.js';
 const router = Router();
 
 const roleEnum = z.enum(['ADMIN', 'AGENT']);
+const teamEnum = z.enum(['SALES', 'SUPPORT', 'ACCOUNTS']);
+const phoneSchema = z
+  .string()
+  .trim()
+  .regex(/^\+?[0-9]{8,15}$/, 'phoneNumber must be an E.164-like number')
+  .optional();
 
 const createUserSchema = z.object({
   username: z.string().trim().min(3).max(64),
   email: z.string().trim().email(),
   password: z.string().min(8).max(128),
   role: roleEnum.default('AGENT'),
+  team: teamEnum.default('SUPPORT'),
+  phoneNumber: phoneSchema,
   isActive: z.boolean().default(true)
 });
 
@@ -22,6 +30,9 @@ const updateUserSchema = z
     email: z.string().trim().email().optional(),
     password: z.string().min(8).max(128).optional(),
     role: roleEnum.optional(),
+    team: teamEnum.optional(),
+    phoneNumber: phoneSchema,
+    isAvailable: z.boolean().optional(),
     isActive: z.boolean().optional()
   })
   .refine((data) => Object.keys(data).length > 0, {
@@ -37,7 +48,11 @@ router.get('/', requireRole(['admin']), async (_req, res, next) => {
         username: true,
         email: true,
         role: true,
+        team: true,
+        phoneNumber: true,
         isActive: true,
+        isAvailable: true,
+        lastLoginAt: true,
         createdAt: true,
         updatedAt: true
       }
@@ -59,6 +74,8 @@ router.post('/', requireRole(['admin']), async (req, res, next) => {
         email: payload.email,
         passwordHash: hashPassword(payload.password),
         role: payload.role,
+        team: payload.team,
+        phoneNumber: payload.phoneNumber || null,
         isActive: payload.isActive
       },
       select: {
@@ -66,7 +83,11 @@ router.post('/', requireRole(['admin']), async (req, res, next) => {
         username: true,
         email: true,
         role: true,
+        team: true,
+        phoneNumber: true,
         isActive: true,
+        isAvailable: true,
+        lastLoginAt: true,
         createdAt: true,
         updatedAt: true
       }
@@ -85,6 +106,11 @@ router.put('/:id', requireRole(['admin']), async (req, res, next) => {
       ...(payload.username ? { username: payload.username } : {}),
       ...(payload.email ? { email: payload.email } : {}),
       ...(payload.role ? { role: payload.role } : {}),
+      ...(payload.team ? { team: payload.team } : {}),
+      ...(Object.hasOwn(payload, 'phoneNumber')
+        ? { phoneNumber: payload.phoneNumber || null }
+        : {}),
+      ...(typeof payload.isAvailable === 'boolean' ? { isAvailable: payload.isAvailable } : {}),
       ...(typeof payload.isActive === 'boolean' ? { isActive: payload.isActive } : {}),
       ...(payload.password ? { passwordHash: hashPassword(payload.password) } : {})
     };
@@ -97,7 +123,11 @@ router.put('/:id', requireRole(['admin']), async (req, res, next) => {
         username: true,
         email: true,
         role: true,
+        team: true,
+        phoneNumber: true,
         isActive: true,
+        isAvailable: true,
+        lastLoginAt: true,
         createdAt: true,
         updatedAt: true
       }

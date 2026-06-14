@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { requireRole } from '../middleware/roleGuard.js';
 import {
+  createAndExecuteSmsAction,
   listAgentActions,
   processDueAgentRetries,
   updateAgentActionStatus
@@ -37,6 +38,22 @@ router.post('/process-retries', requireRole(['admin']), async (_req, res, next) 
   try {
     const data = await processDueAgentRetries();
     res.json({ data });
+  } catch (error) {
+    next(error);
+  }
+});
+
+const smsSchema = z.object({
+  callId: z.string().trim().min(1),
+  toNumber: z.string().trim().min(8).optional(),
+  body: z.string().trim().max(480).optional()
+});
+
+router.post('/sms-send', requireRole(['admin', 'agent']), async (req, res, next) => {
+  try {
+    const payload = smsSchema.parse(req.body || {});
+    const data = await createAndExecuteSmsAction(payload);
+    res.status(201).json({ data });
   } catch (error) {
     next(error);
   }

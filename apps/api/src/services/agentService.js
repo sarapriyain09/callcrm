@@ -22,6 +22,15 @@ function buildActionsFromCall(call) {
       priority: 'HIGH',
       reasoning: 'Call outcome is MISSED.'
     });
+
+    actions.push({
+      actionType: 'SEND_SMS_FOLLOWUP',
+      title: 'Send SMS after missed call',
+      details:
+        'Hi, we noticed we missed your call. Reply with a preferred callback time and the topic you need help with.',
+      priority: 'HIGH',
+      reasoning: 'Missed calls benefit from quick SMS follow-up to recover intent.'
+    });
   }
 
   if (includesAny(text, ['urgent', 'asap', 'immediately', 'critical'])) {
@@ -51,6 +60,16 @@ function buildActionsFromCall(call) {
       details: 'Customer discussed scheduling. Offer a confirmed slot.',
       priority: 'MEDIUM',
       reasoning: 'Detected scheduling keywords.'
+    });
+  }
+
+  if (includesAny(text, ['sms', 'text message', 'text me', 'message me'])) {
+    actions.push({
+      actionType: 'SEND_SMS_FOLLOWUP',
+      title: 'Send SMS confirmation',
+      details: 'Send a confirmation SMS with agreed next steps and callback details.',
+      priority: 'MEDIUM',
+      reasoning: 'Caller explicitly referenced SMS/text follow-up.'
     });
   }
 
@@ -129,6 +148,40 @@ async function postCrmActionEvent(action, call) {
 
 async function executeConnector(action, call) {
   switch (action.actionType) {
+    case 'SEND_SMS_FOLLOWUP': {
+      if (!twilioClient) {
+        throw new Error('Twilio client is not configured for SMS execution.');
+      }
+
+      if (!config.twilioPhoneNumber) {
+        throw new Error('TWILIO_PHONE_NUMBER is missing.');
+      }
+
+      const requestedTo = String(action.payload?.toNumber || '').trim();
+      const to = requestedTo || call.contact?.phone || call.fromNumber;
+      if (!to) {
+        throw new Error('No recipient number available for SMS follow-up.');
+      }
+
+      const body = String(action.details || '').trim() ||
+        `Hello from Splendid Technology. Following up on your recent call (${call.twilioCallSid}).`;
+
+      const message = await twilioClient.messages.create({
+        from: config.twilioPhoneNumber,
+        to,
+        body
+      });
+
+      return {
+        channel: 'sms',
+        provider: 'twilio',
+        sid: message.sid,
+        status: message.status,
+        to,
+        from: config.twilioPhoneNumber,
+        body
+      };
+    }
     case 'SEND_WHATSAPP_FOLLOWUP': {
       if (!twilioClient) {
         throw new Error('Twilio client is not configured for WhatsApp execution.');
@@ -143,12 +196,19 @@ async function executeConnector(action, call) {
         throw new Error('No recipient number available for WhatsApp follow-up.');
       }
 
-      await twilioClient.messages.create({
+      const message = await twilioClient.messages.create({
         from: config.twilioWhatsappFrom,
         to: to.startsWith('whatsapp:') ? to : `whatsapp:${to}`,
         body: `Hello from Splendid Technology. Following up on your recent call (${call.twilioCallSid}).`
       });
-      return;
+      return {
+        channel: 'whatsapp',
+        provider: 'twilio',
+        sid: message.sid,
+        status: message.status,
+        to,
+        from: config.twilioWhatsappFrom
+      };
     }
     case 'SEND_EMAIL_ALERT': {
       await sendAgentActionEmail({
@@ -156,10 +216,17 @@ async function executeConnector(action, call) {
         subject: `[CallCRM] ${action.title}`,
         body: action.details || `Action ${action.actionType} for call ${call.twilioCallSid}`
       });
-      return;
+      return {
+        channel: 'email',
+        provider: 'smtp'
+      };
     }
     default:
       await postCrmActionEvent(action, call);
+      return {
+        channel: 'crm',
+        provider: 'webhook'
+      };
   }
 }
 
@@ -182,15 +249,23 @@ export async function executeAgentActionById(actionId) {
   }
 
   try {
-    await executeConnector(action, action.call);
+    const execution = await executeConnector(action, action.call);
 
     return prisma.agentAction.update({
       where: { id: action.id },
       data: {
         status: 'EXECUTED',
+        executionAttempts: action.executionAttempts + 1,
         executedAt: new Date(),
         lastError: null,
-        nextRetryAt: null
+        nextRetryAt: null,
+        payload: {
+          ...(action.payload && typeof action.payload === 'object' ? action.payload : {}),
+          execution: {
+            ...(execution || {}),
+            executedAt: new Date().toISOString()
+          }
+        }
       },
       include: {
         call: {
@@ -316,6 +391,40 @@ export async function listAgentActions({ status } = {}) {
     },
     take: 200
   });
+}
+
+export async function createAndExecuteSmsAction({ callId, toNumber, body }) {
+  const call = await prisma.callLog.findUnique({
+    where: { id: callId },
+    include: { contact: true }
+  });
+
+  if (!call) {
+    throw new Error('Call not found for SMS action.');
+  }
+
+  const action = await prisma.agentAction.create({
+    data: {
+      callId,
+      actionType: 'SEND_SMS_FOLLOWUP',
+      title: 'Manual SMS follow-up',
+      details:
+        String(body || '').trim() ||
+        'Hi, thanks for contacting us. Please share a good time for us to call you back and what you need help with.',
+      reasoning: 'Created manually from tracker for immediate follow-up.',
+      priority: 'MEDIUM',
+      status: 'APPROVED',
+      payload: {
+        callId,
+        twilioCallSid: call.twilioCallSid,
+        contactId: call.contactId,
+        toNumber: String(toNumber || '').trim() || null,
+        suggestedBy: 'agent-manual-sms'
+      }
+    }
+  });
+
+  return executeAgentActionById(action.id);
 }
 
 export async function updateAgentActionStatus(id, status) {

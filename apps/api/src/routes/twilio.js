@@ -11,27 +11,120 @@ import {
 import { upsertContactByPhone } from '../services/contactService.js';
 import { sendMissedCallAlert } from '../services/notificationService.js';
 import { syncCallToCrm } from '../services/crmSyncService.js';
+import { generateAgentActionsForCall } from '../services/agentService.js';
+import { prisma } from '../services/db.js';
 
 const router = Router();
 const VoiceResponse = twilio.twiml.VoiceResponse;
+const inboundPriorityUsers = ['admin', 'arun', 'shiva'];
 
-const routeMap = {
+const baseRouteMap = {
   '1': {
     label: 'sales',
-    number: config.routeSalesNumber,
-    fallbackDigits: ['2', '3']
+    fallbackDigits: ['2', '3'],
+    team: 'SALES',
+    fallbackNumber: config.routeSalesNumber
   },
   '2': {
     label: 'support',
-    number: config.routeSupportNumber,
-    fallbackDigits: ['1', '3']
+    fallbackDigits: ['1', '3'],
+    team: 'SUPPORT',
+    fallbackNumber: config.routeSupportNumber
   },
   '3': {
     label: 'accounts',
-    number: config.routeAccountsNumber,
-    fallbackDigits: ['2', '1']
+    fallbackDigits: ['2', '1'],
+    team: 'ACCOUNTS',
+    fallbackNumber: config.routeAccountsNumber
   }
 };
+
+async function buildRouteMap() {
+  const availableUsers = await prisma.user.findMany({
+    where: {
+      isActive: true,
+      isAvailable: true,
+      phoneNumber: { not: null }
+    },
+    select: {
+      team: true,
+      phoneNumber: true,
+      lastLoginAt: true,
+      updatedAt: true
+    },
+    orderBy: [{ lastLoginAt: 'desc' }, { updatedAt: 'desc' }]
+  });
+
+  const numbersByTeam = {
+    SALES: [],
+    SUPPORT: [],
+    ACCOUNTS: []
+  };
+
+  for (const user of availableUsers) {
+    const number = String(user.phoneNumber || '').trim();
+    if (!number) continue;
+
+    const teamList = numbersByTeam[user.team] || [];
+    if (!teamList.includes(number)) {
+      teamList.push(number);
+    }
+    numbersByTeam[user.team] = teamList;
+  }
+
+  const routeMap = {};
+
+  for (const [digit, route] of Object.entries(baseRouteMap)) {
+    const teamNumbers = numbersByTeam[route.team] || [];
+    const fallbackNumber = route.fallbackNumber ? [route.fallbackNumber] : [];
+    const numbers = [...teamNumbers, ...fallbackNumber].filter(
+      (value, idx, arr) => value && arr.indexOf(value) === idx
+    );
+
+    routeMap[digit] = {
+      ...route,
+      number: numbers[0] || '',
+      numbers
+    };
+  }
+
+  return routeMap;
+}
+
+async function buildInboundPriorityDialChain() {
+  const userPriority = new Map(inboundPriorityUsers.map((name, index) => [name, index]));
+
+  const prioritizedUsers = await prisma.user.findMany({
+    where: {
+      isActive: true,
+      phoneNumber: { not: null },
+      OR: inboundPriorityUsers.map((username) => ({
+        username: { equals: username, mode: 'insensitive' }
+      }))
+    },
+    select: {
+      username: true,
+      phoneNumber: true
+    }
+  });
+
+  const orderedUsers = prioritizedUsers.sort((a, b) => {
+    const left = userPriority.get(String(a.username || '').toLowerCase()) ?? Number.MAX_SAFE_INTEGER;
+    const right = userPriority.get(String(b.username || '').toLowerCase()) ?? Number.MAX_SAFE_INTEGER;
+    return left - right;
+  });
+
+  const chain = [];
+
+  for (const user of orderedUsers) {
+    const number = String(user.phoneNumber || '').trim();
+    if (number && !chain.includes(number)) {
+      chain.push(number);
+    }
+  }
+
+  return chain;
+}
 
 function absoluteUrl(path) {
   return `${config.appBaseUrl}${path}`;
@@ -62,7 +155,7 @@ function isBusinessHoursNow() {
   );
 }
 
-function getDialChain(selectedDigit) {
+function getDialChain(selectedDigit, routeMap) {
   const route = routeMap[selectedDigit];
   if (!route) return [];
 
@@ -70,9 +163,11 @@ function getDialChain(selectedDigit) {
   const unique = [];
 
   for (const digit of digits) {
-    const number = routeMap[digit]?.number;
-    if (number && !unique.includes(number)) {
-      unique.push(number);
+    const numbers = routeMap[digit]?.numbers || [];
+    for (const number of numbers) {
+      if (number && !unique.includes(number)) {
+        unique.push(number);
+      }
     }
   }
 
@@ -102,6 +197,8 @@ router.post('/voice/incoming', async (req, res, next) => {
 
   try {
     const { CallSid, From, To, CallStatus, Digits } = req.body;
+    const routeMap = await buildRouteMap();
+    const inboundPriorityChain = await buildInboundPriorityDialChain();
     const contact = await upsertContactByPhone(From);
 
     if (!isBusinessHoursNow()) {
@@ -159,8 +256,9 @@ router.post('/voice/incoming', async (req, res, next) => {
       twiml.redirect(absoluteUrl('/twilio/voice/incoming'));
     } else {
       const selectedDigit = routeMap[Digits] ? Digits : config.defaultRouteDigit;
-      const destination = routeMap[selectedDigit];
-      const dialChain = destination ? getDialChain(selectedDigit) : [];
+      const selectedRoute = routeMap[selectedDigit];
+      const fallbackChain = selectedRoute ? getDialChain(selectedDigit, routeMap) : [];
+      const dialChain = inboundPriorityChain.length > 0 ? inboundPriorityChain : fallbackChain;
 
       const call = await createOrUpdateCallFromWebhook({
         CallSid,
@@ -168,19 +266,19 @@ router.post('/voice/incoming', async (req, res, next) => {
         To,
         CallStatus,
         Digits: selectedDigit,
-        RoutedTo: destination?.number,
+        RoutedTo: dialChain[0] || selectedRoute?.number,
         contactId: contact?.id
       });
       await syncCallToCrm('call.routed', call);
 
-      if (!destination || dialChain.length === 0) {
+      if (dialChain.length === 0) {
         twiml.say(
           { voice: 'alice' },
           'No active route is configured for that option. Please leave a message after the beep.'
         );
         twiml.record({ maxLength: 120, playBeep: true });
       } else {
-        twiml.say({ voice: 'alice' }, `Connecting you to ${destination.label}.`);
+        twiml.say({ voice: 'alice' }, 'Connecting you to our team now.');
         dialTarget(twiml, dialChain[0], dialChain, 0);
       }
     }
@@ -226,11 +324,17 @@ router.post('/voice/dial-complete', async (req, res, next) => {
       dialTarget(twiml, nextTarget, chain, nextIdx);
     } else if (DialCallStatus === 'busy' || DialCallStatus === 'no-answer') {
       await markCallOutcome(CallSid, 'MISSED');
-        await syncCallToCrm('call.missed', await getCallBySid(CallSid));
+      const missedCall = await getCallBySid(CallSid);
+      await syncCallToCrm('call.missed', missedCall);
+
+      if (missedCall?.id) {
+        await generateAgentActionsForCall(missedCall.id);
+      }
+
       await sendMissedCallAlert({
         callSid: CallSid,
         fromNumber: From,
-        toEmail: config.missedCallAlertEmail
+        toEmail: 'info@splendidtechnology.co.uk'
       });
 
       twiml.say(

@@ -12,6 +12,21 @@ import { testTwilioConfiguration } from '../services/twilioClient.js';
 
 const router = Router();
 
+function isValidTwilioCallbackBaseUrl(value) {
+  if (!value || typeof value !== 'string') return false;
+
+  try {
+    const parsed = new URL(value);
+    const protocolOk = parsed.protocol === 'https:' || parsed.protocol === 'http:';
+    if (!protocolOk) return false;
+
+    const hostname = parsed.hostname.toLowerCase();
+    return hostname !== 'localhost' && hostname !== '127.0.0.1' && hostname !== '::1';
+  } catch {
+    return false;
+  }
+}
+
 router.get('/', requireRole(['admin']), async (_req, res, next) => {
   try {
     const data = await getSettingsView();
@@ -35,6 +50,19 @@ const inputSchema = z
 router.post('/', requireRole(['admin']), async (req, res, next) => {
   try {
     const payload = inputSchema.parse(req.body || {});
+
+    if (
+      Object.hasOwn(payload, 'APP_BASE_URL') &&
+      payload.APP_BASE_URL &&
+      !isValidTwilioCallbackBaseUrl(payload.APP_BASE_URL)
+    ) {
+      return res.status(400).json({
+        error: 'Invalid APP_BASE_URL',
+        message:
+          'APP_BASE_URL must be an absolute public http(s) URL and cannot use localhost. Use your tunnel or production API URL.'
+      });
+    }
+
     const result = await updateSettings(payload);
     res.json({ data: result });
   } catch (error) {

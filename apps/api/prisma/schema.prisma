@@ -24,6 +24,12 @@ enum UserRole {
   AGENT
 }
 
+enum UserTeam {
+  SALES
+  SUPPORT
+  ACCOUNTS
+}
+
 enum AgentActionStatus {
   PENDING
   APPROVED
@@ -44,7 +50,11 @@ model User {
   email        String   @unique
   passwordHash String
   role         UserRole @default(AGENT)
+  team         UserTeam @default(SUPPORT)
+  phoneNumber  String?  @unique
   isActive     Boolean  @default(true)
+  isAvailable  Boolean  @default(false)
+  lastLoginAt  DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }

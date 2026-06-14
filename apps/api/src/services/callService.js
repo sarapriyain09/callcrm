@@ -55,11 +55,17 @@ export async function updateCallRecording(payload) {
   const { CallSid, RecordingSid, RecordingUrl, RecordingStatus } = payload;
   if (!CallSid) return null;
 
+  const normalizedRecordingUrl = RecordingUrl
+    ? /\.(mp3|wav)(\?.*)?$/i.test(String(RecordingUrl))
+      ? RecordingUrl
+      : `${RecordingUrl}.mp3`
+    : null;
+
   return prisma.callLog.updateMany({
     where: { twilioCallSid: CallSid },
     data: {
       recordingSid: RecordingSid || null,
-      recordingUrl: RecordingUrl || null,
+      recordingUrl: normalizedRecordingUrl,
       recordingStatus: RecordingStatus || null
     }
   });
@@ -101,6 +107,14 @@ export async function getCallById(callId) {
   return prisma.callLog.findUnique({
     where: { id: callId },
     include: { contact: true }
+  });
+}
+
+export async function deleteCallById(callId) {
+  if (!callId) return null;
+
+  return prisma.callLog.delete({
+    where: { id: callId }
   });
 }
 

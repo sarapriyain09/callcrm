@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { apiUrl } from '../api.js';
 
 export default function DialerPanel({ role = 'agent' }) {
   const [toNumber, setToNumber] = useState('');
@@ -17,7 +18,7 @@ export default function DialerPanel({ role = 'agent' }) {
     setError('');
 
     try {
-      const res = await fetch('/api/calls/outbound', {
+      const res = await fetch(apiUrl('/calls/outbound'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

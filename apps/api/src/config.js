@@ -31,6 +31,24 @@ for (const key of required) {
   }
 }
 
+function isLocalhostUrl(value) {
+  if (!value) return false;
+
+  try {
+    const parsed = new URL(value);
+    const host = parsed.hostname.toLowerCase();
+    return host === 'localhost' || host === '127.0.0.1' || host === '::1';
+  } catch {
+    return false;
+  }
+}
+
+if (isLocalhostUrl(process.env.APP_BASE_URL || '')) {
+  console.warn(
+    '[config] APP_BASE_URL points to localhost. Twilio webhooks and status callbacks require a public URL.'
+  );
+}
+
 export const config = {
   port: Number(process.env.PORT || 4000),
   appBaseUrl: process.env.APP_BASE_URL || 'http://localhost:4000',

@@ -10,6 +10,8 @@ async function main() {
       username: 'admin',
       passwordHash: hashPassword('Splendid2024!'),
       role: 'ADMIN',
+      team: 'SUPPORT',
+      phoneNumber: '+447810823317',
       isActive: true
     },
     create: {
@@ -17,6 +19,8 @@ async function main() {
       email: 'info@spelndidtechnology.co.uk',
       passwordHash: hashPassword('Splendid2024!'),
       role: 'ADMIN',
+      team: 'SUPPORT',
+      phoneNumber: '+447810823317',
       isActive: true
     }
   });
@@ -27,6 +31,8 @@ async function main() {
       username: 'arun',
       passwordHash: hashPassword('Arun@2503'),
       role: 'AGENT',
+      team: 'SALES',
+      phoneNumber: '+447352667785',
       isActive: true
     },
     create: {
@@ -34,6 +40,8 @@ async function main() {
       email: 'arun@splendidtechnology.co.uk',
       passwordHash: hashPassword('Arun@2503'),
       role: 'AGENT',
+      team: 'SALES',
+      phoneNumber: '+447352667785',
       isActive: true
     }
   });

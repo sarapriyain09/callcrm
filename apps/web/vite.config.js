@@ -8,14 +8,16 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': apiProxyTarget
+      '/api': apiProxyTarget,
+      '/twilio': apiProxyTarget
     }
   },
   preview: {
     port: 4173,
     allowedHosts: true,
     proxy: {
-      '/api': apiProxyTarget
+      '/api': apiProxyTarget,
+      '/twilio': apiProxyTarget
     }
   }
 });

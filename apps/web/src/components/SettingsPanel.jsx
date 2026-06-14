@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { apiUrl } from '../api.js';
 
 const plainFields = [
   { key: 'DATABASE_URL', label: 'Database URL' },
@@ -55,7 +56,7 @@ export default function SettingsPanel({ role = 'admin' }) {
       setLoading(true);
       setMessage('');
 
-      const res = await fetch('/api/settings', {
+      const res = await fetch(apiUrl('/settings'), {
         headers: { 'x-callcrm-role': role }
       });
       const json = await res.json();
@@ -110,7 +111,7 @@ export default function SettingsPanel({ role = 'admin' }) {
         ...Object.fromEntries(secretFields.map(({ key }) => [key, form[key] || '']))
       };
 
-      const res = await fetch('/api/settings', {
+      const res = await fetch(apiUrl('/settings'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -125,7 +126,7 @@ export default function SettingsPanel({ role = 'admin' }) {
 
       setMessage('Settings saved. Restart API to apply all changes.');
 
-      const refreshed = await fetch('/api/settings', {
+      const refreshed = await fetch(apiUrl('/settings'), {
         headers: { 'x-callcrm-role': role }
       });
       const refreshedJson = await refreshed.json();

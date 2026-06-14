@@ -18,6 +18,25 @@ CallCRM is a customer call management platform for SMEs that combines Twilio voi
 - Database: PostgreSQL + Prisma ORM
 - Telephony: Twilio Voice webhooks
 
+## PWA Install (No Android Studio Required)
+
+CallCRM web app is now PWA-enabled and can be installed directly from mobile browsers.
+
+What is included:
+
+- Web manifest at `apps/web/public/manifest.webmanifest`
+- Service worker at `apps/web/public/sw.js`
+- App icons at `apps/web/public/icons/`
+
+How users install:
+
+- Android (Chrome/Edge): open your CallCRM URL, then choose "Add to Home screen" or "Install app".
+- iPhone (Safari): open your CallCRM URL, tap Share, then "Add to Home Screen".
+
+Requirement:
+
+- Use HTTPS in production so install prompts and service worker behavior are fully supported.
+
 ## Quick Start
 
 1. Install dependencies:
@@ -75,6 +94,11 @@ For local testing, use ngrok to expose the API:
 ```bash
 ngrok http 4000
 ```
+
+Important for outbound calls:
+
+- `APP_BASE_URL` must be a publicly reachable URL.
+- Do not use `http://localhost:4000` in production; Twilio will reject callback URLs (error 21609).
 
 ## Phase 2 Hooks (already scaffolded)
 
@@ -226,34 +250,52 @@ Use one of these options.
 Option A (recommended): git clone on Pi
 
 ```bash
-git clone https://github.com/sarapriyain09/callcrm.git /home/sarapriyain/callcrm
+git clone https://github.com/sarapriyain09/callcrm.git /home/sarapriyain/Projects/callcrm
 ```
 
 Option B: direct sync from Windows terminal with rsync/scp equivalent
 
 ```bash
-rsync -avz --exclude node_modules --exclude .git --exclude .env ./ sarapriyain@192.168.0.64:/home/sarapriyain/callcrm/
+rsync -avz --exclude node_modules --exclude .git --exclude .env ./ sarapriyain@192.168.0.64:/home/sarapriyain/Projects/callcrm/
 ```
 
-You can also use WinSCP GUI to copy project files to `/home/sarapriyain/callcrm`.
+You can also use WinSCP GUI to copy project files to `/home/sarapriyain/Projects/callcrm`.
 
 ### 2. Bootstrap Pi runtime
 
 On Raspberry Pi:
 
 ```bash
-cd /home/sarapriyain/callcrm
+cd /home/sarapriyain/Projects/callcrm
 bash deploy/pi/bootstrap.sh
 ```
 
-Then create `/home/sarapriyain/callcrm/.env` with production values.
+Then create `/home/sarapriyain/Projects/callcrm/.env` with production values.
+
+Minimum required production values:
+
+```env
+PORT=4100
+APP_BASE_URL=https://callcrm.splendidtechnology.co.uk
+DATABASE_URL=postgresql://...
+TWILIO_ACCOUNT_SID=AC...
+TWILIO_AUTH_TOKEN=...
+TWILIO_PHONE_NUMBER=+44...
+```
 
 ### 3. Deploy and run with PM2
 
 ```bash
-cd /home/sarapriyain/callcrm
+cd /home/sarapriyain/Projects/callcrm
 bash deploy/pi/deploy.sh
 pm2 status
+```
+
+For subsequent updates on Pi:
+
+```bash
+cd /home/sarapriyain/Projects/callcrm
+bash deploy/pi/deploy.sh
 ```
 
 PM2 apps are defined in [ecosystem.config.cjs](ecosystem.config.cjs).
@@ -292,6 +334,6 @@ Configure these GitHub repository secrets:
 - `PI_USER` = `sarapriyain`
 - `PI_SSH_PRIVATE_KEY` = private key for Pi SSH access
 - `PI_PORT` = `22` (optional)
-- `PI_APP_DIR` = `/home/sarapriyain/callcrm`
+- `PI_APP_DIR` = `/home/sarapriyain/Projects/callcrm`
 
 If GitHub cannot directly access your LAN IP, expose Pi through Tailscale/WireGuard or a reachable SSH endpoint.
