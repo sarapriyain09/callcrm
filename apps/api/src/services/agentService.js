@@ -2,7 +2,6 @@ import { config } from '../config.js';
 import { prisma } from './db.js';
 import { sendAgentActionEmail } from './notificationService.js';
 import { buildTwilioClient } from './twilioClient.js';
-import { generateNextStepAssistant } from './aiSummaryService.js';
 
 const { client: twilioClient } = buildTwilioClient(config);
 
@@ -212,21 +211,14 @@ async function executeConnector(action, call) {
       };
     }
     case 'SEND_EMAIL_ALERT': {
-      const toEmail = String(action.payload?.toEmail || '').trim() || config.agentNotificationEmailTo;
-      if (!toEmail) {
-        throw new Error('No recipient email available for follow-up.');
-      }
-
       await sendAgentActionEmail({
-        toEmail,
+        toEmail: config.agentNotificationEmailTo,
         subject: `[CallCRM] ${action.title}`,
         body: action.details || `Action ${action.actionType} for call ${call.twilioCallSid}`
       });
       return {
         channel: 'email',
-        provider: 'smtp',
-        toEmail,
-        subject: `[CallCRM] ${action.title}`
+        provider: 'smtp'
       };
     }
     default:
@@ -236,136 +228,6 @@ async function executeConnector(action, call) {
         provider: 'webhook'
       };
   }
-}
-
-async function buildAssistantForCall(call) {
-  const actionRows = await prisma.agentAction.findMany({
-    where: { callId: call.id },
-    orderBy: { createdAt: 'desc' },
-    take: 15
-  });
-
-  return generateNextStepAssistant({
-    call,
-    notes: 'Draft a concise customer follow-up message based on this call context.',
-    agentActions: actionRows
-  });
-}
-
-export async function generateSmsDraft({ callId, toNumber }) {
-  const call = await prisma.callLog.findUnique({
-    where: { id: callId },
-    include: { contact: true }
-  });
-
-  if (!call) {
-    throw new Error('Call not found for SMS draft.');
-  }
-
-  const recipient =
-    String(toNumber || '').trim() || String(call.contact?.phone || '').trim() || String(call.fromNumber || '').trim();
-
-  if (!recipient) {
-    throw new Error('No recipient number available for SMS draft.');
-  }
-
-  const assistant = await buildAssistantForCall(call);
-
-  return {
-    callId,
-    toNumber: recipient,
-    body:
-      String(assistant?.suggestedMessage || '').trim() ||
-      'Hi, thanks for contacting Splendid Technology. Please share your preferred callback time and what you need help with.',
-    context: {
-      recommendedAction: assistant?.recommendedAction || null,
-      informationToCollect: Array.isArray(assistant?.informationToCollect)
-        ? assistant.informationToCollect
-        : []
-    }
-  };
-}
-
-export async function generateEmailDraft({ callId, toEmail }) {
-  const call = await prisma.callLog.findUnique({
-    where: { id: callId },
-    include: { contact: true }
-  });
-
-  if (!call) {
-    throw new Error('Call not found for email draft.');
-  }
-
-  const recipient =
-    String(toEmail || '').trim() ||
-    String(call.contact?.email || '').trim() ||
-    String(config.agentNotificationEmailTo || '').trim();
-
-  if (!recipient) {
-    throw new Error('No recipient email available for follow-up draft.');
-  }
-
-  const assistant = await buildAssistantForCall(call);
-  const customerName = String(call.contact?.name || '').trim() || 'there';
-  const suggestedMessage =
-    String(assistant?.suggestedMessage || '').trim() ||
-    'Thanks for contacting Splendid Technology. Please confirm your preferred callback time and what you need help with.';
-  const contactTags = Array.isArray(call.contact?.tags)
-    ? call.contact.tags.map((tag) => String(tag || '').toLowerCase())
-    : [];
-  const contactNotes = String(call.contact?.notes || '').toLowerCase();
-  const isEngineeringPipeline =
-    contactTags.some((tag) => tag.includes('engineering') || tag.includes('pipeline')) ||
-    (contactNotes.includes('engineering') && contactNotes.includes('pipeline'));
-  const collectionItems = Array.isArray(assistant?.informationToCollect)
-    ? assistant.informationToCollect.slice(0, 4)
-    : [];
-
-  const subject = isEngineeringPipeline
-    ? 'Engineering Pipeline Update and Next Steps'
-    : call.outcome === 'MISSED'
-      ? 'Follow-up on your missed call'
-      : 'Follow-up from your recent call';
-
-  const bodyLines = isEngineeringPipeline
-    ? [
-      `Hi ${customerName},`,
-      '',
-      'Thanks for progressing with our engineering pipeline workflow.',
-      suggestedMessage,
-      '',
-      collectionItems.length
-        ? `For CRM progression, please confirm: ${collectionItems.join('; ')}.`
-        : 'For CRM progression, please confirm your technical requirements, timeline, and key decision owner.',
-      '',
-      'Once we receive this, we will update your pipeline stage and share the next implementation steps.',
-      '',
-      'Regards,',
-      'Splendid Technology Engineering Team'
-    ]
-    : [
-      `Hi ${customerName},`,
-      '',
-      suggestedMessage,
-      '',
-      collectionItems.length
-        ? `To help quickly, please share: ${collectionItems.join('; ')}.`
-        : 'Please share any additional details so we can support you quickly.',
-      '',
-      'Regards,',
-      'Splendid Technology Team'
-    ];
-
-  return {
-    callId,
-    toEmail: recipient,
-    subject,
-    body: bodyLines.join('\n'),
-    context: {
-      recommendedAction: assistant?.recommendedAction || null,
-      informationToCollect: collectionItems
-    }
-  };
 }
 
 export async function executeAgentActionById(actionId) {
@@ -558,55 +420,6 @@ export async function createAndExecuteSmsAction({ callId, toNumber, body }) {
         contactId: call.contactId,
         toNumber: String(toNumber || '').trim() || null,
         suggestedBy: 'agent-manual-sms'
-      }
-    }
-  });
-
-  return executeAgentActionById(action.id);
-}
-
-export async function createAndExecuteEmailAction({ callId, toEmail, subject, body }) {
-  const call = await prisma.callLog.findUnique({
-    where: { id: callId },
-    include: { contact: true }
-  });
-
-  if (!call) {
-    throw new Error('Call not found for email action.');
-  }
-
-  const recipient =
-    String(toEmail || '').trim() ||
-    String(call.contact?.email || '').trim() ||
-    String(config.agentNotificationEmailTo || '').trim();
-
-  if (!recipient) {
-    throw new Error('No recipient email available for follow-up send.');
-  }
-
-  const normalizedSubject =
-    String(subject || '').trim() ||
-    (call.outcome === 'MISSED' ? 'Follow-up on your missed call' : 'Follow-up from your recent call');
-
-  const normalizedBody =
-    String(body || '').trim() ||
-    'Thanks for contacting Splendid Technology. Please reply with your preferred callback time and what you need help with.';
-
-  const action = await prisma.agentAction.create({
-    data: {
-      callId,
-      actionType: 'SEND_EMAIL_ALERT',
-      title: normalizedSubject,
-      details: normalizedBody,
-      reasoning: 'Created manually from tracker after reviewing AI-generated draft context.',
-      priority: 'MEDIUM',
-      status: 'APPROVED',
-      payload: {
-        callId,
-        twilioCallSid: call.twilioCallSid,
-        contactId: call.contactId,
-        toEmail: recipient,
-        suggestedBy: 'agent-manual-email'
       }
     }
   });
