@@ -11,18 +11,6 @@ function includesAny(text, words) {
   return words.some((w) => normalized.includes(w));
 }
 
-const VERTICAL_KEYWORDS = [
-  'vertical',
-  'crm',
-  'digital',
-  'software',
-  'ai solution',
-  'ai-solution',
-  'iot',
-  'engineering',
-  'pipeline'
-];
-
 function buildActionsFromCall(call) {
   const text = `${call.summary || ''} ${call.transcript || ''}`;
   const actions = [];
@@ -326,20 +314,15 @@ export async function generateEmailDraft({ callId, toEmail }) {
     ? call.contact.tags.map((tag) => String(tag || '').toLowerCase())
     : [];
   const contactNotes = String(call.contact?.notes || '').toLowerCase();
-  const detectionText = [
-    ...contactTags,
-    contactNotes,
-    String(call.summary || '').toLowerCase(),
-    String(call.transcript || '').toLowerCase(),
-    String(assistant?.recommendedAction || '').toLowerCase()
-  ].join(' ');
-  const isEngineeringPipeline = includesAny(detectionText, VERTICAL_KEYWORDS);
+  const isEngineeringPipeline =
+    contactTags.some((tag) => tag.includes('engineering') || tag.includes('pipeline')) ||
+    (contactNotes.includes('engineering') && contactNotes.includes('pipeline'));
   const collectionItems = Array.isArray(assistant?.informationToCollect)
     ? assistant.informationToCollect.slice(0, 4)
     : [];
 
   const subject = isEngineeringPipeline
-    ? 'Vertical Pipeline Update and Next Steps'
+    ? 'Engineering Pipeline Update and Next Steps'
     : call.outcome === 'MISSED'
       ? 'Follow-up on your missed call'
       : 'Follow-up from your recent call';
@@ -348,12 +331,12 @@ export async function generateEmailDraft({ callId, toEmail }) {
     ? [
       `Hi ${customerName},`,
       '',
-      'Thanks for progressing with our vertical pipeline workflow (CRM, Digital, Software, AI Solution, IoT, Engineering).',
+      'Thanks for progressing with our engineering pipeline workflow.',
       suggestedMessage,
       '',
       collectionItems.length
         ? `For CRM progression, please confirm: ${collectionItems.join('; ')}.`
-        : 'For CRM progression, please confirm your vertical focus (CRM/Digital/Software/AI Solution/IoT/Engineering), technical requirements, timeline, and key decision owner.',
+        : 'For CRM progression, please confirm your technical requirements, timeline, and key decision owner.',
       '',
       'Once we receive this, we will update your pipeline stage and share the next implementation steps.',
       '',
