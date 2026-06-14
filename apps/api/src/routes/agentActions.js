@@ -2,7 +2,10 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { requireRole } from '../middleware/roleGuard.js';
 import {
+  createAndExecuteEmailAction,
   createAndExecuteSmsAction,
+  generateEmailDraft,
+  generateSmsDraft,
   listAgentActions,
   processDueAgentRetries,
   updateAgentActionStatus
@@ -49,10 +52,47 @@ const smsSchema = z.object({
   body: z.string().trim().max(480).optional()
 });
 
+router.post('/sms-draft', requireRole(['admin', 'agent']), async (req, res, next) => {
+  try {
+    const payload = smsSchema.parse(req.body || {});
+    const data = await generateSmsDraft(payload);
+    res.json({ data });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.post('/sms-send', requireRole(['admin', 'agent']), async (req, res, next) => {
   try {
     const payload = smsSchema.parse(req.body || {});
     const data = await createAndExecuteSmsAction(payload);
+    res.status(201).json({ data });
+  } catch (error) {
+    next(error);
+  }
+});
+
+const emailSchema = z.object({
+  callId: z.string().trim().min(1),
+  toEmail: z.string().trim().email().optional(),
+  subject: z.string().trim().max(180).optional(),
+  body: z.string().trim().max(5000).optional()
+});
+
+router.post('/email-draft', requireRole(['admin', 'agent']), async (req, res, next) => {
+  try {
+    const payload = emailSchema.parse(req.body || {});
+    const data = await generateEmailDraft(payload);
+    res.json({ data });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/email-send', requireRole(['admin', 'agent']), async (req, res, next) => {
+  try {
+    const payload = emailSchema.parse(req.body || {});
+    const data = await createAndExecuteEmailAction(payload);
     res.status(201).json({ data });
   } catch (error) {
     next(error);

@@ -64,6 +64,7 @@ export default function App() {
   const [callingRowId, setCallingRowId] = useState('');
   const [deletingRowId, setDeletingRowId] = useState('');
   const [smsRowId, setSmsRowId] = useState('');
+  const [emailRowId, setEmailRowId] = useState('');
   const [assistantLoadingRowId, setAssistantLoadingRowId] = useState('');
   const [assistantByCallId, setAssistantByCallId] = useState({});
   const [selectedAiCallId, setSelectedAiCallId] = useState('');
@@ -216,19 +217,38 @@ export default function App() {
       return;
     }
 
-    const message = window.prompt(
-      'SMS follow-up message',
-      'Hi, thanks for contacting Splendid Technology. Please share your preferred callback time and what you need help with.'
-    );
-
-    if (message === null) {
-      return;
-    }
-
     setSmsRowId(call.id);
     setCallActionMessage('');
 
     try {
+      const draftRes = await fetch(apiUrl('/agent-actions/sms-draft'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-callcrm-role': user?.roleHeaderValue || 'agent'
+        },
+        body: JSON.stringify({
+          callId: call.id,
+          toNumber
+        })
+      });
+
+      const draftJson = await draftRes.json();
+
+      if (!draftRes.ok) {
+        throw new Error(draftJson?.message || draftJson?.error || 'Unable to build SMS draft');
+      }
+
+      const message = window.prompt(
+        'SMS draft (edit before send)',
+        String(draftJson?.data?.body || '').trim()
+      );
+
+      if (message === null) {
+        setCallActionMessage('SMS send cancelled.');
+        return;
+      }
+
       const res = await fetch(apiUrl('/agent-actions/sms-send'), {
         method: 'POST',
         headers: {
@@ -255,6 +275,76 @@ export default function App() {
       setCallActionMessage(err.message || 'Unable to send SMS follow-up');
     } finally {
       setSmsRowId('');
+    }
+  }
+
+  async function handleSendEmailFromList(call) {
+    setEmailRowId(call.id);
+    setCallActionMessage('');
+
+    try {
+      const draftRes = await fetch(apiUrl('/agent-actions/email-draft'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-callcrm-role': user?.roleHeaderValue || 'agent'
+        },
+        body: JSON.stringify({
+          callId: call.id
+        })
+      });
+
+      const draftJson = await draftRes.json();
+
+      if (!draftRes.ok) {
+        throw new Error(draftJson?.message || draftJson?.error || 'Unable to build email draft');
+      }
+
+      const subject = window.prompt(
+        'Email subject (edit before send)',
+        String(draftJson?.data?.subject || '').trim()
+      );
+
+      if (subject === null) {
+        setCallActionMessage('Email send cancelled.');
+        return;
+      }
+
+      const body = window.prompt(
+        'Email draft body (edit before send)',
+        String(draftJson?.data?.body || '').trim()
+      );
+
+      if (body === null) {
+        setCallActionMessage('Email send cancelled.');
+        return;
+      }
+
+      const res = await fetch(apiUrl('/agent-actions/email-send'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-callcrm-role': user?.roleHeaderValue || 'agent'
+        },
+        body: JSON.stringify({
+          callId: call.id,
+          subject: subject.trim(),
+          body: body.trim()
+        })
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        throw new Error(json?.message || json?.error || 'Unable to send follow-up email');
+      }
+
+      setCallActionMessage('Email follow-up sent.');
+      await reloadDashboardData();
+    } catch (err) {
+      setCallActionMessage(err.message || 'Unable to send follow-up email');
+    } finally {
+      setEmailRowId('');
     }
   }
 
@@ -674,6 +764,7 @@ export default function App() {
                           callingRowId === call.id ||
                           deletingRowId === call.id ||
                           smsRowId === call.id ||
+                          emailRowId === call.id ||
                           assistantLoadingRowId === call.id ||
                           !getCallbackNumber(call)
                         }
@@ -688,6 +779,7 @@ export default function App() {
                           smsRowId === call.id ||
                           deletingRowId === call.id ||
                           callingRowId === call.id ||
+                          emailRowId === call.id ||
                           assistantLoadingRowId === call.id ||
                           !getCallbackNumber(call)
                         }
@@ -699,10 +791,25 @@ export default function App() {
                         type="button"
                         className="table-action"
                         disabled={
+                          emailRowId === call.id ||
+                          smsRowId === call.id ||
+                          deletingRowId === call.id ||
+                          callingRowId === call.id ||
+                          assistantLoadingRowId === call.id
+                        }
+                        onClick={() => handleSendEmailFromList(call)}
+                      >
+                        {emailRowId === call.id ? 'Sending...' : 'Send Email'}
+                      </button>
+                      <button
+                        type="button"
+                        className="table-action"
+                        disabled={
                           assistantLoadingRowId === call.id ||
                           deletingRowId === call.id ||
                           callingRowId === call.id ||
-                          smsRowId === call.id
+                          smsRowId === call.id ||
+                          emailRowId === call.id
                         }
                         onClick={() => handleSuggestNext(call)}
                       >
@@ -715,6 +822,7 @@ export default function App() {
                           deletingRowId === call.id ||
                           callingRowId === call.id ||
                           smsRowId === call.id ||
+                          emailRowId === call.id ||
                           assistantLoadingRowId === call.id
                         }
                         onClick={() => handleDeleteCall(call)}
