@@ -584,20 +584,12 @@ export async function createAndExecuteEmailAction({ callId, toEmail, subject, bo
     throw new Error('No recipient email available for follow-up send.');
   }
 
-  const hasSubject = String(subject || '').trim().length > 0;
-  const hasBody = String(body || '').trim().length > 0;
-  const draftDefaults = hasSubject && hasBody
-    ? null
-    : await generateEmailDraft({ callId, toEmail: recipient });
-
   const normalizedSubject =
     String(subject || '').trim() ||
-    String(draftDefaults?.subject || '').trim() ||
     (call.outcome === 'MISSED' ? 'Follow-up on your missed call' : 'Follow-up from your recent call');
 
   const normalizedBody =
     String(body || '').trim() ||
-    String(draftDefaults?.body || '').trim() ||
     'Thanks for contacting Splendid Technology. Please reply with your preferred callback time and what you need help with.';
 
   const action = await prisma.agentAction.create({
