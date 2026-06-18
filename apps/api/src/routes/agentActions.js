@@ -51,6 +51,13 @@ const smsSchema = z.object({
 
 router.post('/sms-send', requireRole(['admin', 'agent']), async (req, res, next) => {
   try {
+    const requestUsername = String(req.header('x-callcrm-username') || '').trim().toLowerCase();
+    if (requestUsername === 'demo' || requestUsername === 'democallcrm') {
+      return res.status(403).json({
+        error: 'Demo user is read-only and cannot send SMS actions.'
+      });
+    }
+
     const payload = smsSchema.parse(req.body || {});
     const data = await createAndExecuteSmsAction(payload);
     res.status(201).json({ data });

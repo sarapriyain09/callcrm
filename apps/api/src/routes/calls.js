@@ -81,6 +81,13 @@ router.get('/live', async (_req, res, next) => {
 
 router.delete('/:id', requireRole(['admin', 'agent']), async (req, res, next) => {
   try {
+    const requestUsername = String(req.header('x-callcrm-username') || '').trim().toLowerCase();
+    if (requestUsername === 'demo' || requestUsername === 'democallcrm') {
+      return res.status(403).json({
+        error: 'Demo user is read-only and cannot delete calls.'
+      });
+    }
+
     const existing = await getCallById(req.params.id);
     if (!existing) {
       return res.status(404).json({ error: 'Call not found' });
@@ -101,6 +108,13 @@ const outboundSchema = z.object({
 
 router.post('/outbound', requireRole(['admin', 'agent']), async (req, res, next) => {
   try {
+    const requestUsername = String(req.header('x-callcrm-username') || '').trim().toLowerCase();
+    if (requestUsername === 'demo' || requestUsername === 'democallcrm') {
+      return res.status(403).json({
+        error: 'Demo user is read-only and cannot place outbound calls.'
+      });
+    }
+
     if (!twilioClient) {
       return res.status(400).json({
         error:

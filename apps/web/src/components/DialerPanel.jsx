@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { apiUrl } from '../api.js';
 
-export default function DialerPanel({ role = 'agent' }) {
+export default function DialerPanel({ role = 'agent', username = '', readOnly = false }) {
   const [toNumber, setToNumber] = useState('');
   const [introMessage, setIntroMessage] = useState('Hello. This is a call from Call CRM.');
   const [label, setLabel] = useState('');
@@ -9,7 +9,10 @@ export default function DialerPanel({ role = 'agent' }) {
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
 
-  const canSubmit = useMemo(() => toNumber.trim().length >= 8 && !isCalling, [toNumber, isCalling]);
+  const canSubmit = useMemo(
+    () => toNumber.trim().length >= 8 && !isCalling && !readOnly,
+    [toNumber, isCalling, readOnly]
+  );
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -22,7 +25,8 @@ export default function DialerPanel({ role = 'agent' }) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-callcrm-role': role
+          'x-callcrm-role': role,
+          'x-callcrm-username': username
         },
         body: JSON.stringify({
           toNumber: toNumber.trim(),
@@ -51,6 +55,9 @@ export default function DialerPanel({ role = 'agent' }) {
       <p className="subtitle compact">
         Trigger a Twilio outbound call from your configured business number.
       </p>
+      {readOnly ? (
+        <p className="message-text">Demo user is read-only. Calling is disabled.</p>
+      ) : null}
 
       <form className="settings-form" onSubmit={handleSubmit}>
         <div className="settings-grid">
@@ -60,6 +67,7 @@ export default function DialerPanel({ role = 'agent' }) {
               type="text"
               placeholder="+447700900123"
               value={toNumber}
+              disabled={readOnly}
               onChange={(e) => setToNumber(e.target.value)}
             />
           </label>
@@ -70,6 +78,7 @@ export default function DialerPanel({ role = 'agent' }) {
               type="text"
               placeholder="Quote #1042"
               value={label}
+              disabled={readOnly}
               onChange={(e) => setLabel(e.target.value)}
             />
           </label>
@@ -80,6 +89,7 @@ export default function DialerPanel({ role = 'agent' }) {
           <input
             type="text"
             value={introMessage}
+            disabled={readOnly}
             onChange={(e) => setIntroMessage(e.target.value)}
           />
         </label>

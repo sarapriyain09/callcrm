@@ -46,6 +46,27 @@ async function main() {
     }
   });
 
+  await prisma.user.upsert({
+    where: { email: 'demo@splendidtechnology.co.uk' },
+    update: {
+      username: 'demo',
+      passwordHash: hashPassword('Demo@1234'),
+      role: 'AGENT',
+      team: 'SUPPORT',
+      phoneNumber: '+447700900123',
+      isActive: true
+    },
+    create: {
+      username: 'demo',
+      email: 'demo@splendidtechnology.co.uk',
+      passwordHash: hashPassword('Demo@1234'),
+      role: 'AGENT',
+      team: 'SUPPORT',
+      phoneNumber: '+447700900123',
+      isActive: true
+    }
+  });
+
   await prisma.contact.upsert({
     where: { phone: '+441111111111' },
     update: {},

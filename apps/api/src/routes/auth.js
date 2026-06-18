@@ -50,6 +50,7 @@ router.post('/login', async (req, res, next) => {
         team: updatedUser.team,
         phoneNumber: updatedUser.phoneNumber,
         isAvailable: updatedUser.isAvailable,
+        readOnly: String(updatedUser.username || '').toLowerCase() === 'demo',
         roleHeaderValue: updatedUser.role.toLowerCase()
       }
     });

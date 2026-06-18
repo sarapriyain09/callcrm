@@ -5,6 +5,17 @@ import DialerPanel from './components/DialerPanel.jsx';
 import { apiUrl } from './api.js';
 
 const SESSION_KEY = 'callcrm.session.user';
+const DEMO_GUEST_USER = {
+  id: 'guest-democallcrm',
+  username: 'democallcrm',
+  email: 'demo@localhost',
+  role: 'AGENT',
+  team: 'SUPPORT',
+  phoneNumber: null,
+  isAvailable: false,
+  readOnly: true,
+  roleHeaderValue: 'agent'
+};
 
 function formatDuration(seconds) {
   if (!seconds && seconds !== 0) return '-';
@@ -73,6 +84,17 @@ export default function App() {
   const [aiPanelError, setAiPanelError] = useState('');
   const [callActionMessage, setCallActionMessage] = useState('');
   const [callListView, setCallListView] = useState('all');
+  const isReadOnlyUser = Boolean(user?.readOnly);
+
+  useEffect(() => {
+    if (user) return;
+
+    const path = String(window.location.pathname || '').toLowerCase();
+    if (path === '/democallcrm') {
+      setUser(DEMO_GUEST_USER);
+      localStorage.setItem(SESSION_KEY, JSON.stringify(DEMO_GUEST_USER));
+    }
+  }, [user]);
 
   async function reloadDashboardData() {
     if (!user) return;
@@ -150,7 +172,7 @@ export default function App() {
   }
 
   async function handleLogout() {
-    if (user?.id) {
+    if (user?.id && user.id !== DEMO_GUEST_USER.id) {
       try {
         await fetch(apiUrl('/auth/logout'), {
           method: 'POST',
@@ -170,7 +192,20 @@ export default function App() {
     localStorage.removeItem(SESSION_KEY);
   }
 
+  function handleEnterDemoGuest() {
+    setLoginError('');
+    setIdentifier('');
+    setPassword('');
+    setUser(DEMO_GUEST_USER);
+    localStorage.setItem(SESSION_KEY, JSON.stringify(DEMO_GUEST_USER));
+  }
+
   async function handleCallFromList(call) {
+    if (isReadOnlyUser) {
+      setCallActionMessage('Demo user is read-only. Calling is disabled.');
+      return;
+    }
+
     const toNumber = getCallbackNumber(call);
     if (!toNumber) {
       setCallActionMessage('No callback number is available for this call.');
@@ -185,7 +220,8 @@ export default function App() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-callcrm-role': user?.roleHeaderValue || 'agent'
+          'x-callcrm-role': user?.roleHeaderValue || 'agent',
+          'x-callcrm-username': user?.username || ''
         },
         body: JSON.stringify({
           toNumber,
@@ -210,6 +246,11 @@ export default function App() {
   }
 
   async function handleSendSmsFromList(call) {
+    if (isReadOnlyUser) {
+      setCallActionMessage('Demo user is read-only. SMS is disabled.');
+      return;
+    }
+
     const toNumber = getCallbackNumber(call);
     if (!toNumber) {
       setCallActionMessage('No phone number is available for SMS follow-up.');
@@ -233,7 +274,8 @@ export default function App() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-callcrm-role': user?.roleHeaderValue || 'agent'
+          'x-callcrm-role': user?.roleHeaderValue || 'agent',
+          'x-callcrm-username': user?.username || ''
         },
         body: JSON.stringify({
           callId: call.id,
@@ -328,6 +370,11 @@ export default function App() {
   }
 
   async function handleDeleteCall(call) {
+    if (isReadOnlyUser) {
+      setCallActionMessage('Demo user is read-only. Delete is disabled.');
+      return;
+    }
+
     const confirmed = window.confirm('Delete this call record? This cannot be undone.');
     if (!confirmed) return;
 
@@ -442,6 +489,9 @@ export default function App() {
               <button type="submit" disabled={isLoggingIn || !identifier.trim() || !password}>
                 {isLoggingIn ? 'Signing in...' : 'Sign In'}
               </button>
+              <button type="button" onClick={handleEnterDemoGuest} disabled={isLoggingIn}>
+                Enter democallcrm (read-only)
+              </button>
             </div>
 
             {loginError ? <p className="error-text">{loginError}</p> : null}
@@ -490,7 +540,13 @@ export default function App() {
       </div>
 
       {activeTab === 'settings' ? <SettingsPanel role={user.roleHeaderValue} /> : null}
-      {activeTab === 'dialer' ? <DialerPanel role={user.roleHeaderValue} /> : null}
+      {activeTab === 'dialer' ? (
+        <DialerPanel
+          role={user.roleHeaderValue}
+          username={user.username}
+          readOnly={isReadOnlyUser}
+        />
+      ) : null}
       {activeTab === 'assistant' ? (
         <section className="panel">
           <h2>AI Assistant</h2>
@@ -675,6 +731,7 @@ export default function App() {
                           deletingRowId === call.id ||
                           smsRowId === call.id ||
                           assistantLoadingRowId === call.id ||
+                          isReadOnlyUser ||
                           !getCallbackNumber(call)
                         }
                         onClick={() => handleCallFromList(call)}
@@ -689,6 +746,7 @@ export default function App() {
                           deletingRowId === call.id ||
                           callingRowId === call.id ||
                           assistantLoadingRowId === call.id ||
+                          isReadOnlyUser ||
                           !getCallbackNumber(call)
                         }
                         onClick={() => handleSendSmsFromList(call)}
@@ -715,7 +773,8 @@ export default function App() {
                           deletingRowId === call.id ||
                           callingRowId === call.id ||
                           smsRowId === call.id ||
-                          assistantLoadingRowId === call.id
+                          assistantLoadingRowId === call.id ||
+                          isReadOnlyUser
                         }
                         onClick={() => handleDeleteCall(call)}
                       >
