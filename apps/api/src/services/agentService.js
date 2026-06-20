@@ -164,7 +164,7 @@ async function executeConnector(action, call) {
       }
 
       const body = String(action.details || '').trim() ||
-        `Hello from Splendid Technology. Following up on your recent call (${call.twilioCallSid}).`;
+        `Hello from Velynxia. Following up on your recent call (${call.twilioCallSid}).`;
 
       const message = await twilioClient.messages.create({
         from: config.twilioPhoneNumber,
@@ -199,7 +199,7 @@ async function executeConnector(action, call) {
       const message = await twilioClient.messages.create({
         from: config.twilioWhatsappFrom,
         to: to.startsWith('whatsapp:') ? to : `whatsapp:${to}`,
-        body: `Hello from Splendid Technology. Following up on your recent call (${call.twilioCallSid}).`
+        body: `Hello from Velynxia. Following up on your recent call (${call.twilioCallSid}).`
       });
       return {
         channel: 'whatsapp',

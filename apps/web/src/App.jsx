@@ -259,7 +259,7 @@ export default function App() {
 
     const message = window.prompt(
       'SMS follow-up message',
-      'Hi, thanks for contacting Splendid Technology. Please share your preferred callback time and what you need help with.'
+      'Hi, thanks for contacting Velynxia. Please share your preferred callback time and what you need help with.'
     );
 
     if (message === null) {
@@ -460,7 +460,7 @@ export default function App() {
     return (
       <main className="page page-auth">
         <section className="auth-card">
-          <p className="eyebrow">Splendid Technology</p>
+          <p className="eyebrow">Velynxia</p>
           <h1>CallCRM Login</h1>
           <p className="subtitle">Sign in with your username or email.</p>
 
@@ -504,7 +504,7 @@ export default function App() {
   return (
     <main className="page">
       <header className="hero">
-        <p className="eyebrow">Splendid Technology</p>
+        <p className="eyebrow">Velynxia</p>
         <h1>CallCRM Operations Console</h1>
         <div className="hero-meta">
           <span className="subtitle compact">Signed in as {user.username} ({user.role})</span>
